@@ -54,17 +54,12 @@ def main():
     board = [[" " for _ in range(3)] for _ in range(3)]
 
     while True:
-        # Mostrar el tablero
-        display_board(board)
-
-        # Esperar turno del servidor para el jugador 1
+        # Esperar mensaje del servidor
         response = client_socket.recv(1024).decode()
-        print(response)
 
-        # Verificar si es turno del jugador 2
         if "Es tu turno" in response:
             # Mostrar el tablero después del movimiento del jugador 1
-            display_board(board)
+            display_board(board.copy())  # Mostrar copia del tablero actualizado
 
             # Hacer movimiento del jugador 2 y obtener la respuesta del servidor
             response = make_move(board, 2, client_socket)  # Jugador 2 (cliente 2)
@@ -72,8 +67,10 @@ def main():
             # Verificar estado del juego (ganador, empate, continuar)
             if "ganador" in response or "Empate" in response:
                 break
+        elif "Esperando al otro jugador" in response:
+            print(response)  # Mostrar el mensaje de espera
         else:
-            print("Esperando a que el Jugador 1 realice su movimiento...")
+            print(response)
 
     client_socket.close()
 

@@ -1,79 +1,100 @@
 import socket
 import threading
 
-# Inicialización del tablero
+# Inicializar el tablero
 board = [[" " for _ in range(3)] for _ in range(3)]
-player_turn = 1  # Variable global para controlar el turno de los jugadores
+player_turn = 1
+clients = []
 
-# Función para mostrar el tablero
 def display_board():
+    # Función para mostrar el tablero en la consola del servidor
     for row in board:
         print(" | ".join(row))
         print("-" * 9)
 
-# Función para verificar si hay un ganador
-def check_winner(mark):
-    # Verificar filas
+def check_winner(marker):
+    # Función para verificar si hay un ganador
     for row in board:
-        if all(cell == mark for cell in row):
+        if all(cell == marker for cell in row):
             return True
-
-    # Verificar columnas
     for col in range(3):
-        if all(board[row][col] == mark for row in range(3)):
+        if all(row[col] == marker for row in board):
             return True
-
-    # Verificar diagonales
-    if all(board[i][i] == mark for i in range(3)) or all(board[i][2 - i] == mark for i in range(3)):
+    if all(board[i][i] == marker for i in range(3)) or all(board[i][2 - i] == marker for i in range(3)):
         return True
-
     return False
 
-# Función para manejar la lógica del juego Tic Tac Toe para un cliente específico
-def handle_client(conn, player):
-    global board, player_turn
+def send_message(conn, message):
+    conn.send(f"{message}\n".encode())
 
-    conn.send(f"Bienvenido al juego Tic Tac Toe. Esperando al otro jugador...\n".encode())
+def handle_client(conn, player):
+    global board, player_turn, clients
+
+    send_message(conn, "Bienvenido al juego Tic Tac Toe. Esperando al otro jugador...\n")
+    clients.append(conn)
+
+    while len(clients) < 2:
+        continue  # Esperar hasta que ambos jugadores estén conectados
+
+    # Informar a ambos jugadores que pueden comenzar
+    for c in clients:
+        send_message(c, "¡Todos los jugadores están conectados! El juego puede comenzar.")
 
     while True:
         try:
-            # Mostrar tablero actualizado
-            display_board()
+            if player == player_turn:
+                # Solicitar movimiento al jugador actual
+                send_message(conn, f"Es tu turno, jugador {player}. Seleccione una posición (1-9): ")
+                move = conn.recv(1024).decode().strip()
 
-            # Verificar turno del jugador
-            if player != player_turn:
-                conn.send(f"Esperando al otro jugador...\n".encode())
-                continue
+                move = int(move)
+                if 1 <= move <= 9:
+                    row = (move - 1) // 3
+                    col = (move - 1) % 3
+                    if board[row][col] == " ":
+                        #Mostrar movimiento del jugador "x"
+                        print(f"Movimiento del jugador {player}")
 
-            # Solicitar movimiento al jugador
-            conn.send(f"Es tu turno, jugador {player}. Seleccione una posición (1-9): ".encode())
-            move = conn.recv(1024).decode().strip()
+                        board[row][col] = "X" if player == 1 else "O"
+                        
+                        # Mostrar el tablero actualizado en el servidor
+                        display_board()
 
-            move = int(move)
-            if 1 <= move <= 9:
-                row = (move - 1) // 3
-                col = (move - 1) % 3
-                if board[row][col] == " ":
-                    board[row][col] = "X" if player == 1 else "O"
+                        # Enviar estado actualizado del tablero al jugador 2
+                        board_str = "\n".join([" | ".join(row) for row in board])
+                        for c in clients:
+                            if c != conn:
+                                send_message(c, board_str)
 
-                    # Verificar si hay un ganador
-                    if check_winner("X" if player == 1 else "O"):
-                        conn.send(f"¡Felicidades! ¡Eres el ganador, jugador {player}!\n".encode())
-                        break
-                    elif all(all(cell != " " for cell in row) for row in board):
-                        conn.send("¡Empate!\n".encode())
-                        break
+                        # Verificar si hay un ganador
+                        if check_winner("X" if player == 1 else "O"):
+                            for c in clients:
+                                send_message(c, f"¡Felicidades! ¡Eres el ganador, jugador {player}!")
+                            break
+                        elif all(all(cell != " " for cell in row) for row in board):
+                            for c in clients:
+                                send_message(c, "¡Empate!")
+                            break
 
-                    # Cambiar turno al otro jugador
-                    player_turn = 2 if player_turn == 1 else 1
+                        # Cambiar turno al otro jugador
+                        player_turn = 2 if player_turn == 1 else 1
+
+                        # Informar al otro jugador del estado actual del juego
+                        other_player = 2 if player == 1 else 1
+                        send_message(clients[other_player - 1], "Es tu turno. Por favor espera...\n")
+
+                        # Informar al jugador actual del estado actual del tablero
+                        send_message(conn, f"Jugador {player} realizó un movimiento. Estado actual del tablero:")
+                        board_str = "\n".join([" | ".join(row) + "\n" + "-" * 9 for row in board])
+                        send_message(conn, board_str)
+                    else:
+                        send_message(conn, "¡Posición ocupada! Intente nuevamente.")
                 else:
-                    conn.send("¡Posición ocupada! Intente nuevamente.\n".encode())
-            else:
-                conn.send("Ingrese un número entre 1 y 9.\n".encode())
+                    send_message(conn, "Ingrese un número entre 1 y 9.")
         except ValueError:
-            conn.send("Entrada no válida. Ingrese un número.\n".encode())
+            send_message(conn, "Entrada no válida. Ingrese un número.")
         except ConnectionResetError:
-            print(f"La conexión con el jugador {player} ha sido restablecida.")
+            print(f"La conexión con el jugador {player} ha sido reestablecida.")
             break
         except Exception as e:
             print(f"Error inesperado con el jugador {player}: {e}")
@@ -81,30 +102,23 @@ def handle_client(conn, player):
 
     conn.close()
 
-# Función para iniciar el servidor
-def start_server():
-    host = '127.0.0.1'  # localhost
-    port = 12345  # Puerto arbitrario
+def main():
+    host = '127.0.0.1'
+    port = 12345
 
     server_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
     server_socket.bind((host, port))
-    server_socket.listen(2)  # Servidor aceptará conexiones de hasta 2 clientes
+    server_socket.listen(2)
+    print("Servidor iniciado. Esperando conexiones...")
 
-    print(f"Servidor iniciado en {host}:{port}")
-
-    players = []
-    while len(players) < 2:
-        try:
-            conn, addr = server_socket.accept()
-            players.append((conn, addr))
-            print(f"Jugador {len(players)} conectado desde {addr}")
-
-            # Iniciar un hilo para manejar al cliente
-            threading.Thread(target=handle_client, args=(conn, len(players))).start()
-        except Exception as e:
-            print(f"Error al aceptar la conexión: {e}")
+    player = 1
+    while player <= 2:
+        conn, addr = server_socket.accept()
+        print(f"Jugador {player} conectado desde {addr}")
+        threading.Thread(target=handle_client, args=(conn, player)).start()
+        player += 1
 
     server_socket.close()
 
 if __name__ == "__main__":
-    start_server()
+    main()
