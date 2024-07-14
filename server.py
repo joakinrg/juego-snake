@@ -42,7 +42,7 @@ def handle_client(conn, player):
     # Informar a ambos jugadores que pueden comenzar
     if player == 1:
         for c in clients:
-            send_message(c, "¡Todos los jugadores están conectados! Empezando partida.")
+            send_message(c, "¡Todos los jugadores están conectados! Empezando partida." + "\nTurno del jugador 1, por favor espere..."))
     else:
         pass  # El jugador 2 no necesita este mensaje inicial
 
@@ -91,11 +91,13 @@ def handle_client(conn, player):
                         # Cambiar turno al otro jugador
                         player_turn = 2 if player_turn == 1 else 1
 
-
+                        # Informar al otro jugador del estado actual del juego
+                        other_player = 2 if player == 1 else 1
                         # Informar al jugador actual del estado actual del tablero
                         send_message(conn, f"Tu tiro, jugador {player}:")
                         board_str = "\n".join([" | ".join(row) + "\n" + "-" * 9 for row in board])
-                        send_message(conn, board_str)
+                        aviso = f"\nTurno del jugador {other_player}, por favor espere..."
+                        send_message(conn, board_str + aviso)
                     else:
                         send_message(conn, "¡Posición ocupada! Intente nuevamente.")
                 else:
