@@ -1,12 +1,6 @@
 import socket
 import sys
 
-def display_board(board):
-    # Función para mostrar el tablero
-    for row in board:
-        print(" | ".join(row))
-        print("-" * 9)
-
 def make_move(board, player, client_socket):
     # Función para hacer un movimiento
     while True:
@@ -58,19 +52,19 @@ def main():
         response = client_socket.recv(1024).decode()
 
         if "Es tu turno" in response:
-            # Mostrar el tablero después del movimiento del jugador 1
-            display_board(board.copy())  # Mostrar copia del tablero actualizado
-
-            # Hacer movimiento del jugador 2 y obtener la respuesta del servidor
+            # Hacer movimiento del jugador 1 y obtener la respuesta del servidor
+            print("Es tu turno")
             response = make_move(board, 2, client_socket)  # Jugador 2 (cliente 2)
 
             # Verificar estado del juego (ganador, empate, continuar)
             if "ganador" in response or "Empate" in response:
                 break
         elif "Esperando al otro jugador" in response:
+            
             print(response)  # Mostrar el mensaje de espera
         else:
             print(response)
+            
 
     client_socket.close()
 

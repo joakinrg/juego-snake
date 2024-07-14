@@ -30,23 +30,33 @@ def send_message(conn, message):
 def handle_client(conn, player):
     global board, player_turn, clients
 
-    send_message(conn, "Bienvenido al juego Tic Tac Toe. Esperando al otro jugador...\n")
+    if player == 1:
+        send_message(conn, "Bienvenido al juego Tic Tac Toe. Esperando al otro jugador...\n")
+    else:
+        send_message(conn, "Bienvenido al juego Tic Tac Toe.\n")
     clients.append(conn)
 
     while len(clients) < 2:
         continue  # Esperar hasta que ambos jugadores estén conectados
 
     # Informar a ambos jugadores que pueden comenzar
-    for c in clients:
-        send_message(c, "¡Todos los jugadores están conectados! El juego puede comenzar.")
+    if player == 1:
+        for c in clients:
+            send_message(c, "¡Todos los jugadores están conectados! Empezando partida.")
+    else:
+        pass  # El jugador 2 no necesita este mensaje inicial
 
     while True:
         try:
             if player == player_turn:
                 # Solicitar movimiento al jugador actual
                 send_message(conn, f"Es tu turno, jugador {player}. Seleccione una posición (1-9): ")
-                move = conn.recv(1024).decode().strip()
+                
+                #Informar al otro jugador que espere
+                other_player = 2 if player == 1 else 1
+                send_message(clients[other_player - 1], f"Jugador {player} jugando, espera por favor...")
 
+                move = conn.recv(1024).decode().strip()
                 move = int(move)
                 if 1 <= move <= 9:
                     row = (move - 1) // 3
@@ -60,11 +70,13 @@ def handle_client(conn, player):
                         # Mostrar el tablero actualizado en el servidor
                         display_board()
 
-                        # Enviar estado actualizado del tablero al jugador 2
-                        board_str = "\n".join([" | ".join(row) for row in board])
+                        # Enviar estado actualizado del tablero al otro jugador
+                        move_message=f"Jugador {player} realizó un movimiento: \n"
+                        board_str = "\n".join([" | ".join(row) + "\n" + "-" * 9 for row in board])
                         for c in clients:
                             if c != conn:
-                                send_message(c, board_str)
+                                send_message(c,move_message + board_str)
+
 
                         # Verificar si hay un ganador
                         if check_winner("X" if player == 1 else "O"):
@@ -79,12 +91,9 @@ def handle_client(conn, player):
                         # Cambiar turno al otro jugador
                         player_turn = 2 if player_turn == 1 else 1
 
-                        # Informar al otro jugador del estado actual del juego
-                        other_player = 2 if player == 1 else 1
-                        send_message(clients[other_player - 1], "Es tu turno. Por favor espera...\n")
 
                         # Informar al jugador actual del estado actual del tablero
-                        send_message(conn, f"Jugador {player} realizó un movimiento. Estado actual del tablero:")
+                        send_message(conn, f"Tu tiro, jugador {player}:")
                         board_str = "\n".join([" | ".join(row) + "\n" + "-" * 9 for row in board])
                         send_message(conn, board_str)
                     else:
@@ -99,7 +108,6 @@ def handle_client(conn, player):
         except Exception as e:
             print(f"Error inesperado con el jugador {player}: {e}")
             break
-
     conn.close()
 
 def main():
